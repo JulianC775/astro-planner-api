@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import ephem
 
+from src.models.best_dates import BestDatesResponse, NightSummary
 from src.models.milkyway import MilkyWayResponse
 from src.models.moon import MoonResponse
 from src.models.sun import SunResponse
@@ -257,4 +258,59 @@ def milkyway_data(lat: float, lon: float, d: date) -> MilkyWayResponse:
         visibility_start=visibility_start,
         visibility_end=visibility_end,
         peak_altitude=peak_altitude,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Best dates
+# ---------------------------------------------------------------------------
+
+
+def _dark_hours(sun: SunResponse) -> float:
+    """Return hours of astronomical darkness (astro twilight end → next begin)."""
+    end = sun.astronomical_twilight_end
+    begin = sun.astronomical_twilight_begin
+    if end >= begin:
+        return 0.0
+    return (begin - end).total_seconds() / 3600.0
+
+
+def _night_quality(illumination: float, dark_hours: float, mw_visible: bool) -> str:
+    if illumination < 15 and dark_hours >= 4 and mw_visible:
+        return "excellent"
+    if illumination < 35 and dark_hours >= 2:
+        return "good"
+    if illumination < 60 and dark_hours >= 1:
+        return "fair"
+    return "poor"
+
+
+def best_dates(lat: float, lon: float, start: date, days: int) -> BestDatesResponse:
+    """Return a ranked summary of upcoming nights sorted by shooting quality."""
+    nights: list[NightSummary] = []
+    for offset in range(days):
+        d = date.fromordinal(start.toordinal() + offset)
+        moon = moon_data(lat, lon, d)
+        sun = sun_data(lat, lon, d)
+        mw = milkyway_data(lat, lon, d)
+        dark_h = _dark_hours(sun)
+        quality = _night_quality(moon.illumination, dark_h, mw.visible)
+        nights.append(
+            NightSummary(
+                date=d,
+                moon_illumination=moon.illumination,
+                phase_name=moon.phase_name,
+                astronomical_dark_hours=round(dark_h, 2),
+                milkyway_visible=mw.visible,
+                quality=quality,
+            )
+        )
+
+    _order = {"excellent": 0, "good": 1, "fair": 2, "poor": 3}
+    nights.sort(key=lambda n: (_order[n.quality], n.moon_illumination))
+
+    return BestDatesResponse(
+        location={"lat": lat, "lon": lon},
+        days_checked=days,
+        nights=nights,
     )
