@@ -118,34 +118,32 @@ def _twilight_times(
     noon: datetime,
     horizon: str,
 ) -> tuple[datetime | None, datetime | None]:
-    """Return (begin, end) for a twilight type defined by the horizon string.
+    """Return (dusk, dawn) — when darkness begins (evening) and ends (morning).
 
-    For morning twilight *begin* is the rising at that horizon (sun goes up
-    past it) and *end* is the corresponding setting the evening before, but
-    since we want the evening *end* we use next_setting from midnight.
+    dusk  = next setting of the sun below `horizon` after noon
+    dawn  = next rising of the sun above `horizon` after midnight (next day)
     """
-    # Use midnight at the start of the day to search forward.
-    midnight = datetime(noon.year, noon.month, noon.day, 0, 0, 0, tzinfo=timezone.utc)
-
-    obs_morning = _make_observer(lat, lon, midnight)
-    obs_morning.horizon = horizon
+    midnight_next = datetime(noon.year, noon.month, noon.day, 23, 59, 0, tzinfo=timezone.utc)
 
     obs_evening = _make_observer(lat, lon, noon)
     obs_evening.horizon = horizon
 
+    obs_morning = _make_observer(lat, lon, midnight_next)
+    obs_morning.horizon = horizon
+
     sun = ephem.Sun()
 
     try:
-        begin = _ephem_date_to_utc(obs_morning.next_rising(sun, use_center=False))
+        dusk = _ephem_date_to_utc(obs_evening.next_setting(sun, use_center=False))
     except (ephem.CircumpolarError, ephem.NeverUpError, ephem.AlwaysUpError):
-        begin = None
+        dusk = None
 
     try:
-        end = _ephem_date_to_utc(obs_evening.next_setting(sun, use_center=False))
+        dawn = _ephem_date_to_utc(obs_morning.next_rising(sun, use_center=False))
     except (ephem.CircumpolarError, ephem.NeverUpError, ephem.AlwaysUpError):
-        end = None
+        dawn = None
 
-    return begin, end
+    return dusk, dawn
 
 
 def sun_data(lat: float, lon: float, d: date) -> SunResponse:
@@ -178,9 +176,10 @@ def sun_data(lat: float, lon: float, d: date) -> SunResponse:
     sunrise = _rising(obs_rise)
     sunset = _setting(obs_set)
 
-    civil_begin, civil_end = _twilight_times(lat, lon, noon, "-6")
-    nautical_begin, nautical_end = _twilight_times(lat, lon, noon, "-12")
-    astro_begin, astro_end = _twilight_times(lat, lon, noon, "-18")
+    # _twilight_times returns (dusk, dawn): darkness begins at dusk, ends at dawn.
+    civil_dusk, civil_dawn = _twilight_times(lat, lon, noon, "-6")
+    nautical_dusk, nautical_dawn = _twilight_times(lat, lon, noon, "-12")
+    astro_dusk, astro_dawn = _twilight_times(lat, lon, noon, "-18")
 
     # Provide fallback sentinels so the response model is always valid.
     _fallback = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=timezone.utc)
@@ -188,12 +187,12 @@ def sun_data(lat: float, lon: float, d: date) -> SunResponse:
     return SunResponse(
         sunrise=sunrise or _fallback,
         sunset=sunset or _fallback,
-        civil_twilight_begin=civil_begin or _fallback,
-        civil_twilight_end=civil_end or _fallback,
-        nautical_twilight_begin=nautical_begin or _fallback,
-        nautical_twilight_end=nautical_end or _fallback,
-        astronomical_twilight_begin=astro_begin or _fallback,
-        astronomical_twilight_end=astro_end or _fallback,
+        civil_twilight_begin=civil_dusk or _fallback,
+        civil_twilight_end=civil_dawn or _fallback,
+        nautical_twilight_begin=nautical_dusk or _fallback,
+        nautical_twilight_end=nautical_dawn or _fallback,
+        astronomical_twilight_begin=astro_dusk or _fallback,
+        astronomical_twilight_end=astro_dawn or _fallback,
     )
 
 
@@ -267,12 +266,12 @@ def milkyway_data(lat: float, lon: float, d: date) -> MilkyWayResponse:
 
 
 def _dark_hours(sun: SunResponse) -> float:
-    """Return hours of astronomical darkness (astro twilight end → next begin)."""
-    end = sun.astronomical_twilight_end
-    begin = sun.astronomical_twilight_begin
-    if end >= begin:
+    """Return hours of astronomical darkness (dusk→dawn: begin→end)."""
+    dusk = sun.astronomical_twilight_begin  # darkness begins
+    dawn = sun.astronomical_twilight_end    # darkness ends
+    if dawn <= dusk:
         return 0.0
-    return (begin - end).total_seconds() / 3600.0
+    return (dawn - dusk).total_seconds() / 3600.0
 
 
 def _night_quality(illumination: float, dark_hours: float, mw_visible: bool) -> str:
