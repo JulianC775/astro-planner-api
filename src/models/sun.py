@@ -1,12 +1,14 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
 class SunResponse(BaseModel):
-    sunrise: str | None
-    sunset: str | None
-    civil_dawn: str | None
-    civil_dusk: str | None
-    nautical_dawn: str | None
-    nautical_dusk: str | None
-    astronomical_dawn: str | None
-    astronomical_dusk: str | None
+    sunrise: datetime
+    sunset: datetime
+    civil_twilight_begin: datetime
+    civil_twilight_end: datetime
+    nautical_twilight_begin: datetime
+    nautical_twilight_end: datetime
+    astronomical_twilight_begin: datetime
+    astronomical_twilight_end: datetime

@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from src.models.sun import SunResponse
-from src.services.sun_service import get_sun_data
+from src.services.astronomy import sun_data
 
 router = APIRouter(prefix="/sun", tags=["sun"])
 
@@ -15,4 +15,4 @@ async def get_sun(
     lon: Annotated[float, Query(ge=-180, le=180, description="Longitude in decimal degrees")],
     date: Date,
 ) -> SunResponse:
-    return SunResponse(**get_sun_data(lat, lon, date))
+    return sun_data(lat, lon, date)

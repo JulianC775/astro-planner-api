@@ -1,8 +1,10 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
 class MoonResponse(BaseModel):
-    phase: str
+    phase_name: str
     illumination: float
-    moonrise: str | None
-    moonset: str | None
+    rise: datetime | None
+    set: datetime | None

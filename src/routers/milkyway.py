@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from src.models.milkyway import MilkyWayResponse
-from src.services.milkyway_service import get_milkyway_data
+from src.services.astronomy import milkyway_data
 
 router = APIRouter(prefix="/milkyway", tags=["milkyway"])
 
@@ -15,4 +15,4 @@ async def get_milkyway(
     lon: Annotated[float, Query(ge=-180, le=180, description="Longitude in decimal degrees")],
     date: Date,
 ) -> MilkyWayResponse:
-    return MilkyWayResponse(**get_milkyway_data(lat, lon, date))
+    return milkyway_data(lat, lon, date)
